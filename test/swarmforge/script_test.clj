@@ -358,6 +358,61 @@
       (finally
         (fs/delete-tree root)))))
 
+(deftest cursor-launch-command-uses-agent-cli
+  ;; Given a pack role with the cursor backend
+  ;; When SwarmForge builds the launch command
+  ;; Then it starts the Cursor `agent` CLI with workspace trust, yolo, and the role prompt
+  (let [root (tmp-dir)]
+    (try
+      (let [command (:out (run {:dir root}
+                               (script "swarmforge.bb")
+                               "--test-launch-command"
+                               (str root)
+                               "cursor"))]
+        (is (str/includes? command "agent --workspace "))
+        (is (str/includes? command "--trust "))
+        (is (str/includes? command "--yolo "))
+        (is (str/includes? command ".swarmforge/prompts/coder.md"))
+        (is (str/includes? command "\"$(cat "))
+        (is (fs/exists? (fs/path root ".swarmforge/prompts/coder.md"))))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest cursor-launch-command-passes-extra-cli-args
+  (let [root (tmp-dir)]
+    (try
+      (let [command (:out (run {:dir root}
+                               (script "swarmforge.bb")
+                               "--test-launch-command"
+                               (str root)
+                               "cursor"
+                               "--model composer-2.5"))]
+        (is (str/includes? command "agent --workspace "))
+        (is (str/includes? command "--trust "))
+        (is (str/includes? command "--yolo "))
+        (is (str/includes? command "--model composer-2.5 ")))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest cursor-lieutenant-launch-waits-for-chat
+  ;; Given a host lieutenant configured for cursor
+  ;; When SwarmForge builds the lieutenant launch command
+  ;; Then agent starts trusted/yolo with no initial prompt
+  (let [root (tmp-dir)]
+    (try
+      (write-file (fs/path root "swarmforge/swarmforge.conf") "Lieutenant cursor\n")
+      (let [command (:out (run {:dir root}
+                               (script "swarmforge.bb")
+                               "--test-lieutenant-launch-command"
+                               (str root)))]
+        (is (str/includes? command "agent --workspace "))
+        (is (str/includes? command "--trust "))
+        (is (str/includes? command "--yolo "))
+        (is (fs/exists? (fs/path root ".swarmforge/prompts/lieutenant.md")))
+        (is (not (str/includes? command "\"$(cat "))))
+      (finally
+        (fs/delete-tree root)))))
+
 (deftest grok-launch-command-passes-initial-prompt
   (let [root (tmp-dir)]
     (try
@@ -486,6 +541,7 @@
   ;; Then the start command bypasses permission prompts
   (doseq [[agent needle] [["codex" "--yolo"]
                           ["copilot" "--yolo"]
+                          ["cursor" "--yolo"]
                           ["claude" "--permission-mode bypassPermissions"]
                           ["grok" "--permission-mode bypassPermissions"]]]
     (let [root (tmp-dir)]

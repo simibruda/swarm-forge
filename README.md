@@ -38,7 +38,7 @@ chat, Teardown — on the forge README you installed.
 ## Install the helper
 
 Prerequisites: `zsh`, `git`, `tmux`, Babashka (`bb`), and at least one agent
-backend (`grok`, `codex`, `claude`, or `copilot`).
+backend (`grok`, `codex`, `claude`, `copilot`, or `cursor`).
 
 ```sh
 mkdir -p ~/cmds

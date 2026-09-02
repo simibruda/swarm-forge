@@ -144,7 +144,12 @@
 
 (def receive-modes #{"task" "batch"})
 (def propagation-modes #{"forward-only" "back-one" "back-all"})
-(def known-agents #{"claude" "codex" "copilot" "grok"})
+(def known-agents #{"claude" "codex" "copilot" "cursor" "grok"})
+
+(defn agent-binary [agent]
+  (case agent
+    "cursor" "agent"
+    agent))
 
 (defn receive-fields [trailing]
   (let [[receive-mode after-receive]
@@ -377,7 +382,7 @@
 
 (defn check-backend-dependencies! [ctx]
   (doseq [agent (map :agent (:roles ctx))]
-    (check-dependency! agent)))
+    (check-dependency! (agent-binary agent))))
 
 (defn create-role-session! [ctx session title]
   (sh "tmux" "-S" (:tmux-socket ctx) "new-session" "-d" "-s" session "-n" agent-window)
@@ -469,8 +474,14 @@
   (case agent
     "codex" (if (extra-has? row "--yolo") "" "--yolo ")
     "copilot" (if (extra-has? row "--yolo") "" "--yolo ")
+    "cursor" (if (or (extra-has? row "--yolo") (extra-has? row "--force") (extra-has? row "-f"))
+               ""
+               "--yolo ")
     "claude" (if (extra-has? row "bypassPermissions") "" "--permission-mode bypassPermissions ")
     ""))
+
+(defn cursor-trust-flag [row]
+  (if (extra-has? row "--trust") "" "--trust "))
 
 (defn grok-permission-prefix [row]
   "--permission-mode bypassPermissions ")
@@ -520,6 +531,10 @@
                                  "--name " (sq (str "SwarmForge " display)) " "
                                  (yolo-flag agent row) (extra-args-prefix row)
                                  (when initial-prompt? (str "-i " prompt)))
+                  "cursor" (str "agent --workspace " (sq (str role-worktree)) " "
+                                (cursor-trust-flag row) (yolo-flag agent row)
+                                (extra-args-prefix row)
+                                (when initial-prompt? prompt))
                   "grok" (str "grok --cwd " (sq (str role-worktree)) " "
                               (grok-permission-prefix row) (extra-args-prefix row)
                               "--minimal --rules " prompt

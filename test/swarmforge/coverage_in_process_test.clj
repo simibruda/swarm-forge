@@ -262,6 +262,10 @@
   (is (= "ghostty" (swarmforge/normalize-terminal-backend "ghostty")))
   (is (= "--yolo " (swarmforge/yolo-flag "codex" {:extra-args ""})))
   (is (= "" (swarmforge/yolo-flag "codex" {:extra-args "--yolo"})))
+  (is (= "--yolo " (swarmforge/yolo-flag "cursor" {:extra-args ""})))
+  (is (= "" (swarmforge/yolo-flag "cursor" {:extra-args "--force"})))
+  (is (= "agent" (swarmforge/agent-binary "cursor")))
+  (is (= "codex" (swarmforge/agent-binary "codex")))
   (is (= "--permission-mode bypassPermissions "
          (swarmforge/yolo-flag "claude" {:extra-args ""})))
   (is (= "" (swarmforge/yolo-flag "unknown" {:extra-args ""})))
