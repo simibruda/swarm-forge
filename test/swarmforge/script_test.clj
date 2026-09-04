@@ -654,17 +654,24 @@
                   (format "specifier\tmaster\t%s\tsession\tSpecifier\tcodex\ttask\n" root))
       (let [missing (run {:dir root :ok? false}
                          (script "swarm_tool.sh") "require" "clj-mutate")
+            missing-ts (run {:dir root :ok? false}
+                            (script "swarm_tool.sh") "require" "crap4ts")
             help (run {:dir root :ok? false}
                       (script "swarm_tool.sh") "--help")]
         (is (not= 0 (:exit missing)))
         (is (str/includes? (:err missing) "MISSING: clj-mutate"))
         (is (not (str/includes? (:err missing) "Unknown tool")))
+        (is (str/includes? (:err missing-ts) "MISSING: crap4ts"))
+        (is (not (str/includes? (:err missing-ts) "Unknown tool")))
         (is (str/includes? (str (:err help) (:out help)) "clj-mutate"))
         (is (str/includes? (str (:err help) (:out help)) "crap4clj"))
         (is (str/includes? (str (:err help) (:out help)) "dry4clj"))
         (is (str/includes? (str (:err help) (:out help)) "cloverage"))
         (is (str/includes? (str (:err help) (:out help)) "speclj"))
-        (is (str/includes? (str (:err help) (:out help)) "speclj-structure-check")))
+        (is (str/includes? (str (:err help) (:out help)) "speclj-structure-check"))
+        (is (str/includes? (str (:err help) (:out help)) "crap4ts"))
+        (is (str/includes? (str (:err help) (:out help)) "dry4ts"))
+        (is (str/includes? (str (:err help) (:out help)) "mutate4ts")))
       (finally
         (fs/delete-tree root)))))
 
@@ -976,6 +983,78 @@
               (format "specifier\tmaster\t%s\tsession\tSpecifier\tcodex\ttask\n" root))
   (write-file (fs/path root ".swarmforge/tools" tool "bb.edn")
               (str "{:tasks {" tool " (apply println *command-line-args*)}}\n")))
+
+(defn write-echo-npm-tool! [root tool bin-rel]
+  (write-file (fs/path root ".swarmforge/roles.tsv")
+              (format "specifier\tmaster\t%s\tsession\tSpecifier\tcodex\ttask\n" root))
+  (write-file (fs/path root ".swarmforge/tools" tool "package.json")
+              (str "{\"name\":\"" tool "\",\"version\":\"0.0.0\"}\n"))
+  (write-file (fs/path root ".swarmforge/tools" tool bin-rel)
+              "console.log(process.argv.slice(2).join(' '))\n"))
+
+(deftest swarm-tool-ensure-crap4ts-writes-node-wrapper
+  ;; Given a pack project with local crap4ts source
+  ;; When swarm_tool.sh ensure crap4ts
+  ;; Then the wrapper execs the npm CLI with node
+  (let [root (tmp-dir)]
+    (try
+      (write-echo-npm-tool! root "crap4ts" "dist/cli.js")
+      (run {:dir root} (script "swarm_tool.sh") "ensure" "crap4ts")
+      (let [wrapper (slurp (str (fs/path root ".swarmforge/bin/crap4ts")))]
+        (is (fs/executable? (fs/path root ".swarmforge/bin/crap4ts")))
+        (is (str/includes? wrapper "exec node"))
+        (is (str/includes? wrapper "dist/cli.js"))
+        (is (not (str/includes? wrapper "bb --config")))
+        (is (zero? (:exit (run {:dir root} (script "swarm_tool.sh") "require" "crap4ts")))))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest swarm-tool-ensure-dry4ts-writes-node-wrapper
+  ;; Given a pack project with local dry4ts source
+  ;; When swarm_tool.sh ensure dry4ts
+  ;; Then the wrapper execs the npm CLI with node
+  (let [root (tmp-dir)]
+    (try
+      (write-echo-npm-tool! root "dry4ts" "dist/cli.js")
+      (run {:dir root} (script "swarm_tool.sh") "ensure" "dry4ts")
+      (let [wrapper (slurp (str (fs/path root ".swarmforge/bin/dry4ts")))]
+        (is (fs/executable? (fs/path root ".swarmforge/bin/dry4ts")))
+        (is (str/includes? wrapper "exec node"))
+        (is (str/includes? wrapper "dist/cli.js"))
+        (is (zero? (:exit (run {:dir root} (script "swarm_tool.sh") "require" "dry4ts")))))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest mutate4ts-wrapper-is-differential-with-four-workers
+  ;; Given an installed mutate4ts wrapper
+  ;; When it is invoked with --mutate-all
+  ;; Then --mutate-all is dropped and --max-workers 4 is used
+  (let [root (tmp-dir)]
+    (try
+      (write-echo-npm-tool! root "mutate4ts" "dist/cli/main.js")
+      (run {:dir root} (script "swarm_tool.sh") "ensure" "mutate4ts")
+      (let [out (:out (run {:dir root}
+                           (str (fs/path root ".swarmforge/bin/mutate4ts"))
+                           "src/flag.ts" "--reuse-coverage" "--mutate-all"))]
+        (is (str/includes? out "--max-workers 4"))
+        (is (not (str/includes? out "--mutate-all"))))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest mutate4ts-scan-does-not-inject-max-workers
+  ;; Given an installed mutate4ts wrapper
+  ;; When it is invoked with --scan
+  ;; Then it does not add --max-workers
+  (let [root (tmp-dir)]
+    (try
+      (write-echo-npm-tool! root "mutate4ts" "dist/cli/main.js")
+      (run {:dir root} (script "swarm_tool.sh") "ensure" "mutate4ts")
+      (let [out (:out (run {:dir root}
+                           (str (fs/path root ".swarmforge/bin/mutate4ts"))
+                           "src/flag.ts" "--scan"))]
+        (is (not (str/includes? out "--max-workers"))))
+      (finally
+        (fs/delete-tree root)))))
 
 (deftest clj-mutate-wrapper-is-differential-with-four-workers
   ;; Given an installed clj-mutate wrapper
