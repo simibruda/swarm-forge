@@ -31,7 +31,10 @@
    "mutate4go" {:source "github.com/unclebob/mutate4go" :bb-task "mutate4go"}
    "crap4java" {:source "github.com/unclebob/crap4java" :bb-task "crap4java"}
    "dry4java" {:source "github.com/unclebob/dry4java" :bb-task "dry4java"}
-   "mutate4java" {:source "github.com/unclebob/mutate4java" :bb-task "mutate4java"}})
+   "mutate4java" {:source "github.com/unclebob/mutate4java" :bb-task "mutate4java"}
+   "crap4ts" {:source "github.com/simibruda/crap4ts" :npm-bin "dist/cli.js"}
+   "dry4ts" {:source "github.com/simibruda/dry4ts" :npm-bin "dist/cli.js"}
+   "mutate4ts" {:source "github.com/simibruda/mutate4ts" :npm-bin "dist/cli/main.js"}})
 
 (def usage-text
   (str "Usage:\n"
@@ -111,11 +114,16 @@
     (when-not (zero? (:exit result))
       (exit! 1 (str "Failed to clone " url "\n" (:err result) (:out result))))))
 
-(defn ensure-source! [root source]
-  (let [dir (source-dir root source)]
-    (when-not (fs/exists? (fs/path dir "bb.edn"))
+(defn source-marker [spec]
+  (if (:npm-bin spec) "package.json" "bb.edn"))
+
+(defn ensure-source! [root spec]
+  (let [source (:source spec)
+        dir (source-dir root source)
+        marker (source-marker spec)]
+    (when-not (fs/exists? (fs/path dir marker))
       (when (System/getenv "SWARMFORGE_TOOL_SRC")
-        (exit! 1 (str "SWARMFORGE_TOOL_SRC is missing bb.edn: " dir)))
+        (exit! 1 (str "SWARMFORGE_TOOL_SRC is missing " marker ": " dir)))
       (clone-source! dir source))
     dir))
 
@@ -149,7 +157,7 @@
 
 (defn rewrite-bash [tool]
   (cond
-    (#{"clj-mutate" "mutate4go" "mutate4java"} tool) (mutate-rewrite-bash)
+    (#{"clj-mutate" "mutate4go" "mutate4java" "mutate4ts"} tool) (mutate-rewrite-bash)
     (= "gherkin-mutator" tool) (gherkin-rewrite-bash)
     :else ""))
 
@@ -190,13 +198,43 @@
           (when (seq args) (str " " args))
           " \"$@\"\n"))))
 
+(defn run-in-dir! [dir message & args]
+  (let [result (apply sh/sh (concat args [:dir (str dir)]))]
+    (when-not (zero? (:exit result))
+      (exit! 1 (str message "\n" (:err result) (:out result))))
+    result))
+
+(defn ensure-npm-ready! [src-dir bin-rel]
+  (let [bin (fs/path src-dir bin-rel)]
+    (when-not (fs/exists? bin)
+      (when-not (fs/exists? (fs/path src-dir "node_modules"))
+        (run-in-dir! src-dir (str "npm install failed in " src-dir)
+                     "npm" "install"))
+      (run-in-dir! src-dir (str "npm run build failed in " src-dir)
+                   "npm" "run" "build")
+      (when-not (fs/exists? bin)
+        (exit! 1 (str "npm build did not produce " bin))))
+    bin))
+
+(defn write-npm-wrapper! [root tool spec src-dir]
+  (let [bin (ensure-npm-ready! src-dir (:npm-bin spec))
+        target (wrapper-path root tool)]
+    (write-wrapper!
+     target
+     (str (rewrite-bash tool)
+          "exec node " (sq bin) " \"$@\"\n"))))
+
 (defn install-one! [tool]
   (let [spec (tool-spec tool)
         root (project-root)
         name (canonical-tool tool)
-        target (if-let [bb-task (:bb-task spec)]
-                 (write-bb-wrapper! root name bb-task
-                                    (ensure-source! root (:source spec)))
+        target (cond
+                 (:npm-bin spec)
+                 (write-npm-wrapper! root name spec (ensure-source! root spec))
+                 (:bb-task spec)
+                 (write-bb-wrapper! root name (:bb-task spec)
+                                    (ensure-source! root spec))
+                 :else
                  (write-mvn-wrapper! root name spec))]
     (println "INSTALLED:" name (str target))))
 

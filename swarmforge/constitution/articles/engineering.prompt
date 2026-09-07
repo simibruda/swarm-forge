@@ -1,13 +1,14 @@
 # Engineering Rules
 
 ## Startup Tools
-- On startup, procure the latest version of each required CRAP, mutation, and DRY tool for the project language directly from the listed `github.com/unclebob/...` repositories and get each one ready to run.
+- On startup, procure the latest version of each required CRAP, mutation, and DRY tool for the project language directly from the listed GitHub repositories and get each one ready to run.
 - Resolve each listed repository at its latest available upstream version before installing or building it.
 - Do not rely on stale cached, vendored, or preinstalled copies when a fresh GitHub install/build is possible in the current environment.
 - Language tool table:
   - Go: install with `go install`; mutation `github.com/unclebob/mutate4go`, CRAP `github.com/unclebob/crap4go`, DRY `github.com/unclebob/dry4go`.
   - Clojure: install with Clojure CLI/deps.edn; mutation `github.com/unclebob/clj-mutate`, CRAP `github.com/unclebob/crap4clj`, DRY `github.com/unclebob/dry4clj`.
   - Java: install with Maven (`mvn`); mutation `github.com/unclebob/mutate4java`, CRAP `github.com/unclebob/crap4java`, DRY `github.com/unclebob/dry4java`.
+  - TypeScript: install with `npm`; mutation `github.com/simibruda/mutate4ts`, CRAP `github.com/simibruda/crap4ts`, DRY `github.com/simibruda/dry4ts`.
 
 ## Language Defaults
 - For Clojure projects, prefer Babashka where possible.
